@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OBSIDIAN PULSE — Virtual Smartwatch</title>
+  <!-- Linked External CSS File -->
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js CDN for 360° 3D Round Smartwatch -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Chart.js CDN for Analytics Graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- Embedded Healthy Ranges Configuration (Required by Analytics JS) -->
+  <script id="normal-data" type="application/json">
+    {
+      "heart_rate": { "min": 60, "max": 100 },
+      "spo2": { "min": 95, "max": 100 },
+      "systolic": { "min": 90, "max": 120 },
+      "diastolic": { "min": 60, "max": 80 },
+      "sleep_hours": { "min": 7, "max": 9 }
+    }
+  </script>
+
+  <!-- Top Navigation Header -->
+  <header class="navbar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <h1>OBSIDIAN PULSE</h1>
+    </div>
+
+    <div class="nav-controls">
+      <!-- Timeframe Selector from Analytics Dashboard -->
+      <div class="range" role="group" aria-label="Chart timeframe">
+        <button type="button" data-days="1">24h</button>
+        <button type="button" class="active" data-days="7">7d</button>
+        <button type="button" data-days="30">30d</button>
+      </div>
+
+      <button id="flipWatchBtn" class="btn btn-outline" title="Flip between Front OLED and Back Sensors">
+        Flip to Sensors (360°)
+      </button>
+      <button id="manageWidgetsBtn" class="btn btn-primary">
+        + / - Customize Widgets
+      </button>
+      <button onclick="openLogicModal()" class="logic-nav-btn">
+        ? system logic
+      </button>
+    </div>
+  </header>
+  <div id="logicModal"class="modal backdrop"onclick="outsideClick(event)">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h2>SYSTEM LOGIC <span class="divider">|</span><span class="subtitle">HOW IT WORKS</span></h2>
+            <button onclick="closeLogicModal()"class="close-btn">Close[&times;]</button>
+
+        </div>
+        <div class=""logic-grid>
+            <div class="logic-box">
+                <div class="box-title green">💚HEART RATE MONITORING (GREEN PPG)</div>
+                <P>Uses simulated photoplethysmography (530nm green light) to detect volumetric blood flow changes per beat.</P>
+                <div class="algo-tag">ALGORITHM:peak to peak interval detection(60/RR-interval).</div>
+            </div>
+            <div class="logic-box">
+                <div class="box-title red">🩸BLOOD OXYGEN (SpO2) MONITORING (RED LED)</div>
+                <p>Stimulates differential absorption of red (660nm)and infrared(940nm) light to measure oxygenated and deoxygenated hemoglobin.</p>
+                <div class="aglo-tag">ALGORITHM:ratio of ratios (R/IR) to estimate SpO2.</div>
+            </div>
+            <div class="logic-box">
+                <div class="box-title red">💧 BLOOD PRESSURE ESTIMATION</div>
+                <P>Correlates stimulates PPG waveform parameters (pulse transit time & pulse wave velocity) with arterial stiffness</P>
+                <div class="algo-tag">ALGORITHM:linear regression mapping to systolic / diastolic mmHg</div>
+            </div>
+            <div class="logic-box">
+                <div class="box-title yellow">👟 STEP COUNTER & SLEEP</div>
+                <p> Tracks 3-axis accelerometer peaks for gait cycles and combines low heart rate variance with stillness for sleep stages</p>
+                <div class="algo-tag">Formula: distance=steps x 0.75m | calories=steps x 0.04 kcal</div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <!-- Main Landscape Dashboard Layout -->
+  <main class="dashboard-container">
+
+    <!-- Left Column Widgets -->
+    <section class="widget-column" id="left-widgets">
+
+      <!-- Widget 1: Heartbeat Monitoring -->
+      <article class="widget-card" data-widget="heart" data-key="heart_rate" id="widget-heart">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="sensor-badge green-badge">GREEN PPG</span>
+            <h2>Heartbeat Monitor</h2>
+          </div>
+          <span class="status-tag status" id="hrStatus" data-tone="ok">Normal</span>
+        </div>
+
+        <div class="metric-display">
+          <span class="metric-value accent-lime value" id="hrValue">85</span>
+          <span class="metric-unit">BPM</span>
+          <span class="stat-range-inline">Normal 60–100 bpm</span>
+        </div>
+
+        <!-- Chart.js Canvas inside Graph Slot -->
+        <div class="analyst-graph-slot" id="analystGraphHeart">
+          <canvas id="hr"></canvas>
+        </div>
+
+        <div class="control-group">
+          <label for="hrSlider">Simulate Heart Rate (40 – 200 BPM)</label>
+          <input type="range" id="hrSlider" min="40" max="200" value="85" />
+        </div>
+      </article>
+
+      <!-- Widget 2: Blood Pressure Estimation -->
+      <article class="widget-card" data-widget="bp" data-key="bp" id="widget-bp">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="sensor-badge green-badge">GREEN PPG</span>
+            <h2>Blood Pressure</h2>
+          </div>
+          <span class="status-tag status" id="bpStatus" data-tone="ok">Optimal</span>
+        </div>
+
+        <div class="metric-display">
+          <span class="metric-value accent-blue value" id="bpValue">120/80</span>
+          <span class="metric-unit">mmHg</span>
+          <span class="stat-range-inline">Normal 90–120 / 60–80</span>
+        </div>
+
+        <!-- Chart.js Canvas inside Graph Slot -->
+        <div class="analyst-graph-slot" id="analystGraphBP">
+          <canvas id="bp"></canvas>
+        </div>
+
+        <div class="dual-sliders">
+          <div class="control-group">
+            <label for="sysSlider">Systolic: <strong id="sysLabel">120</strong></label>
+            <input type="range" id="sysSlider" min="80" max="190" value="120" />
+          </div>
+          <div class="control-group">
+            <label for="diaSlider">Diastolic: <strong id="diaLabel">80</strong></label>
+            <input type="range" id="diaSlider" min="50" max="120" value="80" />
+          </div>
+        </div>
+      </article>
+
+    </section>
+
+    <!-- Center 3D Round Smartwatch Stage -->
+    <section class="watch-stage">
+      <div class="stage-top-bar">
+        <span class="live-indicator"><span class="pulse-dot"></span> LIVE 3D SIMULATION</span>
+        <span class="active-led-indicator" id="ledStatusText">Active Sensor: 530nm Green LED</span>
+      </div>
+
+      <!-- 3D Canvas Container -->
+      <div id="watch3dContainer" title="Click and drag to rotate 360 degrees"></div>
+
+      <p class="drag-hint">Drag watch 360° to inspect front OLED dial &amp; rear optical LED sensors</p>
+
+      <!-- Quick Watch Mode Switcher -->
+      <div class="watch-mode-bar">
+        <button class="mode-btn active" data-mode="heart">Heart (85 BPM)</button>
+        <button class="mode-btn" data-mode="spo2">SpO2 (Red Light)</button>
+        <button class="mode-btn" data-mode="bp">Blood Pressure</button>
+        <button class="mode-btn" data-mode="steps">Steps</button>
+        <button class="mode-btn" data-mode="sleep">Sleep</button>
+      </div>
+    </section>
+
+    <!-- Right Column Widgets -->
+    <section class="widget-column" id="right-widgets">
+
+      <!-- Widget 3: SpO2 Monitoring (Triggers Red Light) -->
+      <article class="widget-card" data-widget="spo2" data-key="spo2" id="widget-spo2">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="sensor-badge red-badge">RED 660nm LED</span>
+            <h2>SpO2 Oxygen</h2>
+          </div>
+          <div style="display: flex; gap: 0.4rem; align-items: center;">
+            <span class="status-tag status" id="spo2Status" data-tone="ok">Normal</span>
+            <button class="btn-mini-red" id="activateSpo2Btn">Test Red LED</button>
+          </div>
+        </div>
+
+        <div class="metric-display">
+          <span class="metric-value accent-red value" id="spo2Value">98</span>
+          <span class="metric-unit">% SpO2</span>
+          <span class="stat-range-inline">Normal 95–100%</span>
+        </div>
+
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill red-fill" id="spo2Bar" style="width: 98%;"></div>
+        </div>
+
+        <!-- Chart.js Canvas inside Graph Slot -->
+        <div class="analyst-graph-slot" id="analystGraphSpo2">
+          <canvas id="spo2"></canvas>
+        </div>
+
+        <div class="control-group">
+          <label for="spo2Slider">Oxygen Saturation (85% – 100%)</label>
+          <input type="range" id="spo2Slider" min="85" max="100" value="98" />
+        </div>
+      </article>
+
+      <!-- Widget 4: Step Counting -->
+      <article class="widget-card" data-widget="steps" id="widget-steps">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="sensor-badge green-badge">ACCELEROMETER</span>
+            <h2>Step Counter</h2>
+          </div>
+          <div class="step-quick-btns">
+            <button class="btn-step" id="subStepsBtn">-500</button>
+            <button class="btn-step" id="addStepsBtn">+500</button>
+          </div>
+        </div>
+
+        <div class="metric-display">
+          <span class="metric-value accent-lime" id="stepsValue">6,420</span>
+          <span class="metric-unit">/ 10,000 steps</span>
+        </div>
+
+        <div class="sub-metrics">
+          <span>Distance: <strong id="distValue">4.8 km</strong></span>
+          <span>Calories: <strong id="calValue">256 kcal</strong></span>
+        </div>
+
+        <div class="control-group">
+          <label for="stepsSlider">Custom Steps (0 – 25,000)</label>
+          <input type="range" id="stepsSlider" min="0" max="25000" step="100" value="6420" />
+        </div>
+      </article>
+
+    </section>
+
+    <!-- Bottom Full-Width Widget: Sleep Monitoring -->
+    <section class="bottom-widget-row">
+      <article class="widget-card wide-card" data-widget="sleep" data-key="sleep_hours" id="widget-sleep">
+        <div class="wide-card-left">
+          <div class="widget-header">
+            <div class="widget-title">
+              <span class="sensor-badge green-badge">GREEN PPG + MOTION</span>
+              <h2>Sleep Monitoring</h2>
+            </div>
+            <span class="status-tag status" id="sleepQualityTag" data-tone="ok">Restorative</span>
+          </div>
+          <div class="metric-display">
+            <span class="metric-value accent-blue value" id="sleepValue">7.5</span>
+            <span class="metric-unit">Hours</span>
+          </div>
+          <span class="stat-range-inline">Normal 7–9 h per night</span>
+        </div>
+
+        <div class="wide-card-middle">
+          <div class="sleep-stages-bar">
+            <div class="stage-deep" id="deepBar" style="width: 25%;" title="Deep Sleep">Deep 25%</div>
+            <div class="stage-light" id="lightBar" style="width: 52%;" title="Light Sleep">Light 52%</div>
+            <div class="stage-rem" id="remBar" style="width: 23%;" title="REM Sleep">REM 23%</div>
+          </div>
+          <div class="control-group">
+            <label for="sleepSlider">Adjust Sleep Duration (3.0 – 12.0 hrs)</label>
+            <input type="range" id="sleepSlider" min="3" max="12" step="0.5" value="7.5" />
+          </div>
+        </div>
+
+        <!-- Chart.js Canvas inside Graph Slot -->
+        <div class="analyst-graph-slot wide-slot" id="analystGraphSleep">
+          <canvas id="sleep"></canvas>
+        </div>
+      </article>
+    </section>
+
+    <!-- Integrated Healthy Adult Ranges Reference Table -->
+    <section class="bottom-widget-row">
+      <article class="widget-card reference-card">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="sensor-badge green-badge">CLINICAL BASELINE</span>
+            <h2>Healthy Adult Reference Ranges</h2>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="reference-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Normal Range</th>
+                <th>Unit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Heart rate (resting)</td>
+                <td>60–100</td>
+                <td>bpm</td>
+              </tr>
+              <tr>
+                <td>Blood oxygen (SpO2)</td>
+                <td>95–100</td>
+                <td>%</td>
+              </tr>
+              <tr>
+                <td>Systolic pressure</td>
+                <td>90–120</td>
+                <td>mmHg</td>
+              </tr>
+              <tr>
+                <td>Diastolic pressure</td>
+                <td>60–80</td>
+                <td>mmHg</td>
+              </tr>
+              <tr>
+                <td>Sleep (per night)</td>
+                <td>7–9</td>
+                <td>hours</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+  </main>
+
+  <!-- Modal for Adding / Subtracting Widgets -->
+  <div class="modal-backdrop hidden" id="widgetModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Customize Dashboard Widgets</h3>
+        <button class="close-modal" id="closeModalBtn">&times;</button>
+      </div>
+      <p class="modal-desc">Toggle features on or off to customize your smartwatch workspace:</p>
+      <div class="toggle-list">
+        <label class="toggle-item">
+          <input type="checkbox" class="widget-toggle" value="heart" checked />
+          <span>Heartbeat Monitoring (40–200 BPM)</span>
+        </label>
+        <label class="toggle-item">
+          <input type="checkbox" class="widget-toggle" value="bp" checked />
+          <span>Blood Pressure Estimation</span>
+        </label>
+        <label class="toggle-item">
+          <input type="checkbox" class="widget-toggle" value="spo2" checked />
+          <span>SpO2 Monitoring (Red LED Sensor)</span>
+        </label>
+        <label class="toggle-item">
+          <input type="checkbox" class="widget-toggle" value="steps" checked />
+          <span>Step Counting &amp; Activity</span>
+        </label>
+        <label class="toggle-item">
+          <input type="checkbox" class="widget-toggle" value="sleep" checked />
+          <span>Sleep Monitoring &amp; Stages</span>
+        </label>
+      </div>
+      <button class="btn btn-primary full-width" id="doneModalBtn">Apply Layout</button>
+    </div>
+  </div>
+
+  <!-- Linked External JavaScript File -->
+  <script src="script.js"></script>
+</body>
+</html>
